@@ -56,6 +56,9 @@ class HPFSpectrum(object):
         self.header_flat = self.hdu_flat[0].header
         self.flat_sci = self.hdu_flat[1].data
         self.flat_sky = self.hdu_flat[2].data
+        if np.isin(list(self.header.keys()),'EXTRMETH').max():
+            self.flat_sci = np.ones(self.hdu_flat[1].data.shape)
+            self.flat_sky = np.ones(self.hdu_flat[2].data.shape) 
         
         self.e_sci = np.sqrt(self.hdu[4].data)*self.exptime
         self.e_sky = np.sqrt(self.hdu[5].data)*self.exptime*self.sky_scaling_factor
@@ -247,11 +250,18 @@ class HPFSpectrum(object):
         Deblaze spectrum, make available with self.f_debl
         """
         hdu = astropy.io.fits.open(self.path_flat_blazed)
-        self.f_sci_debl = self.hdu[1].data*self.exptime/hdu[1].data
-        self.f_sky_debl = self.hdu[2].data*self.exptime/hdu[2].data
+        if not np.isin(list(self.header.keys()),'EXTRMETH').max():
+            self.f_sci_debl = self.hdu[1].data*self.exptime/hdu[1].data
+            self.f_sky_debl = self.hdu[2].data*self.exptime/hdu[2].data
+        else:
+            self.f_sci_debl = self.hdu[1].data*self.exptime
+            self.f_sky_debl = self.hdu[2].data*self.exptime            
         self.f_debl = self.f_sci_debl-self.f_sky_debl*self.sky_scaling_factor
         if self.degrade_snr != None:
-            self.f_degrade_debl = self.f_degrade/hdu[1].data
+            if not np.isin(list(self.header.keys()),'EXTRMETH').max():
+                self.f_degrade_debl = self.f_degrade/hdu[1].data
+            else:
+                self.f_degrade_debl = self.f_degrade
         for i in range(28): 
             self.f_debl[i] = self.f_debl[i]/np.nanmedian(self.f_debl[i])
             if self.degrade_snr != None:
