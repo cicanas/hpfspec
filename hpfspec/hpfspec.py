@@ -233,8 +233,8 @@ class HPFSpectrum(object):
         f = f[m]
         e = e[m]
         
-        ff = scipy.interpolate.interp1d(w,f,kind='linear')(ww)
-        ee = scipy.interpolate.interp1d(w,e,kind='linear')(ww)
+        ff = scipy.interpolate.interp1d(w,f,kind='linear',bounds_error=False)(ww)
+        ee = scipy.interpolate.interp1d(w,e,kind='linear',bounds_error=False)(ww)
 
         if p is not None:
             print('Applying Chebychev polynomial',p)
