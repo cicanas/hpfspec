@@ -1,0 +1,11 @@
+--2026-10-22 16:48:30--  https://exoplanetarchive.ipac.caltech.edu/cgi-bin/IceTable/nph-iceTblDownload
+Resolving exoplanetarchive.ipac.caltech.edu (exoplanetarchive.ipac.caltech.edu)... 104.18.29.19, 104.18.28.19
+Connecting to exoplanetarchive.ipac.caltech.edu (exoplanetarchive.ipac.caltech.edu)|104.18.29.19|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/xml]
+Saving to: ‘nph-iceTblDownload’
+
+nph-iceTblDownload                        [<=>                                                                    ]       0  --.-KB/s               nph-iceTblDownload                        [ <=>                                                                   ]      56  --.-KB/s    in 0s      
+
+2026-10-22 16:48:30 (4.21 MB/s) - ‘nph-iceTblDownload’ saved [56]
+

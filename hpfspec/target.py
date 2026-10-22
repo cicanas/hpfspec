@@ -6,7 +6,9 @@ import configparser
 import os
 from astroquery.mast import Catalogs
 from astropy.time import Time
-from six.moves.urllib.request import urlopen
+from urllib.request import Request, urlopen
+from urllib.parse import urlencode
+import tempfile
 from . import bary
 DIRNAME = '' #os.path.dirname(__file__)
 PATH_TARGETS = os.path.join(DIRNAME,'targets')
@@ -14,7 +16,7 @@ PATH_TARGETS = os.path.join(DIRNAME,'targets')
 class Target(object):
     """
     Simple target class. Capable of querying SIMBAD. Can calculate barycentric corrections.
-    
+
     EXAMPLE:
         H = HPFSpectrum(fitsfiles[1])
         H.plot_order(14,deblazed=True)
@@ -22,7 +24,7 @@ class Target(object):
         T.calc_barycentric_velocity(H.jd_midpoint,'McDonald Observatory')
         T = Target('G 9-40')
     """
-    
+
     def __init__(self,name,config_folder=PATH_TARGETS):
         self.config_folder = config_folder
         self.config_filename = self.config_folder + os.sep + name + '.config'
@@ -70,12 +72,33 @@ class Target(object):
         data['rv'] = 0.
         return data
 
-    def query_toi(self,ticname):
+    def query_toi(self,toiname):
         """
         Query the TESS Object of Interest Catalog for data
         """
         name = toiname.replace('-',' ').replace('_',' ')
-        toicat = pd.read_csv(urlopen('https://exofop.ipac.caltech.edu/tess/download_toi.php?sort=toi&output=pipe'),sep='|',comment='#')
+        try:
+            toicat = pd.read_csv('https://exofop.ipac.caltech.edu/tess/download_toi.php?sort=toi&output=pipe',sep='|',comment='#')
+        except:
+            url = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/IceTable/nph-iceTblDownload'
+            post_fields = {'workspace': '2026.10.22_13.37.55_3562103/TblView/2026.10.22_13.46.20_3603973',
+                           'useTimestamp': '1',
+                           'table': '/exodata/vmexoweb2/ExoTables/TOI.tbl',
+                           'format': 'CSV',
+                           'user': '',
+                           'label': '',
+                           'columns': 'all',
+                           'rows': 'all',
+                           'mission': 'ExoplanetArchive',
+                           'noErrors': 'true'}
+            request = Request(url, urlencode(post_fields).encode())
+            with tempfile.NamedTemporaryFile(mode='w') as f:
+                csv_data = urlopen(request).read().decode()
+                f.write(csv_data)
+                f.flush()
+                toicat = pd.read_csv(f.name,sep=',',comment='#')
+            toicat['TIC ID'] = toicat['tid'].values
+            toicat['TOI'] = toicat['toi'].values
         toicat = toicat[np.isin(toicat.TOI.values.astype(int),[int(name.split()[-1])])].reset_index(drop=True)
         df = Catalogs.query_object('TIC {:0.0f}'.format(toicat.loc[0,'TIC ID']), radius=0.0003, catalog="TIC").to_pandas()[0:1]
         data = {}
@@ -108,21 +131,21 @@ class Target(object):
         with open(self.config_filename,'w') as f:
             config.write(f)
         print('Done')
-        
-    def calc_barycentric_velocity(self,jdtime,obsname):
+
+    def calc_barycentric_velocity(self,jdtime,obsname='McDonald Observatory'):
         """
         OUTPUT:
             BJD_TDB
             berv in km/s
-        
+
         EXAMPLE:
             bjd, berv = bary.bjdbrv(H.jd_midpoint,T.ra,T.dec,obsname='McDonald Observatory',
                            pmra=T.pmra,pmdec=T.pmdec,rv=T.rv,parallax=T.px,epoch=T.epoch)
         """
-        bjd, berv = bary.bjdbrv(jdtime,self.ra,self.dec,obsname='McDonald Observatory',
+        bjd, berv = bary.bjdbrv(jdtime,self.ra,self.dec,obsname=obsname,
                                    pmra=self.pmra,pmdec=self.pmdec,rv=self.rv,parallax=self.px,epoch=self.epoch)
         return bjd, berv/1000.
-    
+
     def __repr__(self):
         return "{}, ra={:0.4f}, dec={:0.4f}, pmra={}, pmdec={}, rv={:0.4f}, px={:0.4f}, epoch={}".format(self.name,
                                             self.ra,self.dec,self.pmra,self.pmdec,self.rv,self.px,self.epoch)
