@@ -23,7 +23,7 @@ PATH_TARGETS = target.PATH_TARGETS
 class HPFSpectrum(object):
     """
     Yet another HPF Spectrum object. Can work with deblazed spectra.
-    
+
     EXAMPLE:
         H = HPFSpectrum(fitsfiles[1])
         H.plot_order(14,deblazed=True)
@@ -34,13 +34,13 @@ class HPFSpectrum(object):
     path_skymask = PATH_SKYMASK
     path_ccf_mask = PATH_CCF_MASK
     path_wavelength_solution = PATH_WAVELENGTH
-    
-    def __init__(self,filename,targetname='',deblaze=True,ccf_redshift=True,tell_err_factor=1.,sky_err_factor=1.,sky_scaling_factor=1.0, degrade_snr = None):
+
+    def __init__(self,filename,targetname='',deblaze=True,ccf_redshift=True,tell_err_factor=1.,sky_err_factor=1.,sky_scaling_factor=1.0, degrade_snr = None, only_orders = None):
         self.filename = filename
         self.basename = filename.split(os.sep)[-1]
         self.sky_scaling_factor = sky_scaling_factor
         self.degrade_snr = degrade_snr
-        
+
         # Read science frame
         self.hdu = astropy.io.fits.open(filename)
         self.header = self.hdu[0].header
@@ -50,7 +50,7 @@ class HPFSpectrum(object):
         except Exception as e: self.qprog = np.nan
         midpoint_keywords = ['JD_FW{}'.format(i) for i in range(28)]
         self.jd_midpoint = np.median(np.array([self.header[i] for i in midpoint_keywords]))
-        
+
         # Read Flat
         self.hdu_flat = astropy.io.fits.open(self.path_flat_deblazed)
         self.header_flat = self.hdu_flat[0].header
@@ -58,8 +58,8 @@ class HPFSpectrum(object):
         self.flat_sky = self.hdu_flat[2].data
         if np.isin(list(self.header.keys()),'EXTRMETH').max():
             self.flat_sci = np.ones(self.hdu_flat[1].data.shape)
-            self.flat_sky = np.ones(self.hdu_flat[2].data.shape) 
-            
+            self.flat_sky = np.ones(self.hdu_flat[2].data.shape)
+
         self.e_sci = np.sqrt(self.hdu[4].data)*self.exptime
         self.e_sky = np.sqrt(self.hdu[5].data)*self.exptime*self.sky_scaling_factor
         self.e_cal = np.sqrt(self.hdu[6].data)*self.exptime
@@ -67,7 +67,7 @@ class HPFSpectrum(object):
 
         self.f_sky = (self.hdu[2].data*self.exptime/self.flat_sky)*self.sky_scaling_factor
         self._f_sky = self.hdu[2].data*self.exptime
-        
+
         self._f_sci = self.hdu[1].data*self.exptime
         self.f_sci = self.hdu[1].data*self.exptime/self.flat_sci
         self.f = self.f_sci - self.f_sky
@@ -103,11 +103,19 @@ class HPFSpectrum(object):
         self.sn17 = np.nanmedian(self.f[17]/self.e[17])
         self.sn18 = np.nanmedian(self.f[18]/self.e[18])
         self.sn = self.f/self.e
-        
+
         if targetname=='':
             targetname = self.object
         self.target = target.Target(targetname)
         self.bjd, self.berv = self.target.calc_barycentric_velocity(self.jd_midpoint,'McDonald Observatory')
+
+        if only_orders is not None:
+            print('Keeping only specified order indices:{}'.format(only_orders))
+            self.w = self.w[np.atleast_1d(only_orders),:]
+            self.f = self.f[np.atleast_1d(only_orders),:]
+            self.e = self.e[np.atleast_1d(only_orders),:]
+            self.flat_sci = self.flat_sci[np.atleast_1d(only_orders),:]
+            self.flat_sky = self.flat_sky[np.atleast_1d(only_orders),:]
 
         print('Barycentric shifting')
         self.rv = 0.
@@ -128,13 +136,13 @@ class HPFSpectrum(object):
     def get_telluric_mask(self,w=None,o=None):
         """
         Return telluric mask interpolated onto a given grid.
-        
+
         INPUT:
             w - wavelength grid to interpolate on
-            o - 
-            
+            o -
+
         OUTPUT:
-        
+
         EXAMPLE:
         """
         if w is None:
@@ -149,13 +157,13 @@ class HPFSpectrum(object):
     def get_sky_mask(self,w=None,o=None):
         """
         Return sky mask interpolated onto a given grid.
-        
+
         INPUT:
             w - wavelength grid to interpolate on
-            o - 
-            
+            o -
+
         OUTPUT:
-        
+
         EXAMPLE:
         """
         if w is None:
@@ -192,7 +200,7 @@ class HPFSpectrum(object):
         Calculate absolute RV for different orders using two iterations (course + fine fitting Gaussian)
 
         INPUT:
-            
+
 
         OUTPUT:
             rv1 - from 1st course iteration
@@ -218,10 +226,10 @@ class HPFSpectrum(object):
         NOTES:
             dt = 0.04/4 = 0.01 for HPF
         """
-        
+
         if shifted: w = self.w_shifted
         else: w = self.w
-            
+
         m = (w> ww.min()-2.)&(w<ww.max()+2.)
         w = w[m]
         f = self.f_debl[m]
@@ -232,7 +240,7 @@ class HPFSpectrum(object):
         w = w[m]
         f = f[m]
         e = e[m]
-        
+
         ff = scipy.interpolate.interp1d(w,f,kind='linear',bounds_error=False)(ww)
         ee = scipy.interpolate.interp1d(w,e,kind='linear',bounds_error=False)(ww)
 
@@ -244,7 +252,7 @@ class HPFSpectrum(object):
             print('Applying vsini: {}km/s'.format(vsini))
             ff = rotbroad_help.broaden(ww,ff,vsini)
         return ff, ee
-            
+
     def deblaze(self):
         """
         Deblaze spectrum, make available with self.f_debl
@@ -259,19 +267,19 @@ class HPFSpectrum(object):
             self.f_sky_debl = self.hdu[2].data*self.exptime/hdu[2].data
         else:
             self.f_sci_debl = self.hdu[1].data*self.exptime
-            self.f_sky_debl = self.hdu[2].data*self.exptime            
+            self.f_sky_debl = self.hdu[2].data*self.exptime
         self.f_debl = self.f_sci_debl-self.f_sky_debl*self.sky_scaling_factor
         if self.degrade_snr != None:
             if not np.isin(list(self.header.keys()),'EXTRMETH').max():
                 self.f_degrade_debl = self.f_degrade/hdu[1].data
             else:
                 self.f_degrade_debl = self.f_degrade
-        for i in range(28): 
+        for i in range(28):
             self.f_debl[i] = self.f_debl[i]/np.nanmedian(self.f_debl[i])
             if self.degrade_snr != None:
                 self.f_degrade_debl[i] = self.f_degrade_debl[i]/np.nanmedian(self.f_degrade_debl[i])
         self.e_debl = self.f_debl/self.sn
-            
+
     def redshift(self,berv=None,rv=None):
         """
         Redshift spectrum correcting for both berv and rv
@@ -295,13 +303,13 @@ class HPFSpectrum(object):
         ff, ee = self.resample_order(ww)
         _f = rotbroad_help.broaden(ww,ff,vsini,u1=eps)
         return _f
-        
+
     def plot_order(self,o,deblazed=False,shifted=False,ax=None,color=None,plot_shaded=True,alpha=1.):
         """
         Plot spectrum deblazed or not
-        
+
         EXAMPLE:
-            
+
         """
         mask_tell = np.genfromtxt(self.path_tellmask)
         mask_sky = np.genfromtxt(self.path_skymask)
@@ -392,7 +400,7 @@ class HPFSpecList(object):
 def DegradeSNR(Flux, Variance, DesiredSNR):
 	"""
 	Degrade the SNR, by increasing the variance based on the DesiredSNR
-	
+
 	INPUTS:
 		Flux: 1D Flux array
 		Variance: 1D Variance array
@@ -400,22 +408,22 @@ def DegradeSNR(Flux, Variance, DesiredSNR):
 	OUTPUTS:
 		NewFlux: Gaussian distributed new flux using a new variance based on DesiredSNR
 		NewVariance: New variance based on degraded SNR
-		
+
 	Shubham Kanodia
 	4th March 2022
 	"""
-	
+
 	OriginalSNR = np.nanmedian(Flux/np.sqrt(Variance))
 	ScaleSNR = OriginalSNR/DesiredSNR
 
 	NewVariance = Variance * (ScaleSNR**2)
 	NewFlux = np.random.normal(loc=Flux, scale=np.sqrt(NewVariance))
-	
+
 	return NewFlux, NewVariance
 
 #def chi2spectra(ww,H1,H2,rv1=None,rv2=None,plot=False,verbose=False):
 #    """
-#    
+#
 #    EXAMPLE:
 #        H1 = HPFSpectrum(df[df.name=='G_9-40'].filename.values[0])
 #        H2 = HPFSpectrum(df[df.name=='AD_Leo'].filename.values[0])
@@ -424,7 +432,7 @@ def DegradeSNR(Flux, Variance, DesiredSNR):
 #        wmax = 10380.
 #        ww = np.arange(wmin,wmax,0.01)
 #        chi2spectra(ww,H1,H2,rv1=14.51,plot=True)
-#        
+#
 #    EXAMPLE loop through chi2 rv space:
 #        wmin = 10280.
 #        wmax = 10380.
@@ -448,7 +456,7 @@ def DegradeSNR(Flux, Variance, DesiredSNR):
 #    H2.deblaze()
 #    H2.redshift(rv=rv2)
 #    ff2, ee2 = H2.resample_order(ww)
-#    
+#
 #    chi2 = stats.chi2(ff1-ff2,np.sqrt(ee1**2.+ee2**2.),verbose=verbose)
 #
 #    if plot:
@@ -465,5 +473,5 @@ def DegradeSNR(Flux, Variance, DesiredSNR):
 #        bx.set_ylabel('Residuals')
 #        ax.set_title('{} vs {}: $\chi^2=${:0.3f}'.format(H1.object,H2.object,chi2))
 #        ax.legend(loc='upper right',fontsize=8,bbox_to_anchor=(1.4,1.))
-#        
+#
 #    return chi2
